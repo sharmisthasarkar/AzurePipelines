@@ -1,0 +1,27 @@
+#Parameters in Az Pipelines
+
+parameters:
+  - name: environment
+    type: string
+    default: dev
+    values:
+      - dev
+      - test
+      - prod
+
+
+
+  - name: deployOption
+    type: boolean
+    default: false
+
+# Use parameter in tasks
+
+stages:
+- stage: Build
+  jobs:
+  - job: BuildJob
+    steps:
+    - script: echo "Building for environment: ${{ parameters.environment }}"
+
+# Use ##vso[task.setvariable variable=buildOutput]BuildComplete" to Passing Arguments Across Jobs or Stages
