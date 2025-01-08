@@ -1,0 +1,25 @@
+stages:
+- stage: Dev
+  jobs:
+  - job: DeployDev
+    steps:
+    - script: |
+        terraform init -backend-config="key=dev/terraform.tfstate"
+        terraform plan -var-file="dev.tfvars"
+        terraform apply -var-file="dev.tfvars" -auto-approve
+- stage: Staging
+  jobs:
+  - job: DeployStaging
+    steps:
+    - script: |
+        terraform init -backend-config="key=staging/terraform.tfstate"
+        terraform plan -var-file="staging.tfvars"
+        terraform apply -var-file="staging.tfvars" -auto-approve
+- stage: Production
+  jobs:
+  - job: DeployProduction
+    steps:
+    - script: |
+        terraform init -backend-config="key=production/terraform.tfstate"
+        terraform plan -var-file="production.tfvars"
+        terraform apply -var-file="production.tfvars" -auto-approve
