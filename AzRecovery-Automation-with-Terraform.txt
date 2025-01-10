@@ -1,0 +1,167 @@
+A Terraform-based disaster recovery (DR) plan for a critical application hosted on Azure should include configurations to ensure high availability, automated recovery, and minimal downtime in case of failure. Below are the key configurations to include:
+
+1. Primary and Secondary Region Setup
+    Deploy the infrastructure in a primary region and set up a secondary region as the disaster recovery region.
+    
+    Use Azure paired regions for optimized failover and replication.
+    
+    Example:
+    
+    hcl
+    Copy code
+    variable "primary_region" {
+      default = "East US"
+    }
+    
+    variable "secondary_region" {
+      default = "West US"
+    }
+    
+    resource "azurerm_resource_group" "primary" {
+      name     = "primary-resources"
+      location = var.primary_region
+    }
+    
+    resource "azurerm_resource_group" "secondary" {
+      name     = "secondary-resources"
+      location = var.secondary_region
+    }
+2. Use Azure Site Recovery for VMs
+    Configure Azure Site Recovery (ASR) to replicate VMs across regions.
+    Automate the setup using Terraform:
+    hcl
+    Copy code
+    resource "azurerm_site_recovery_replication_policy" "example" {
+      name                     = "asr-replication-policy"
+      location                 = azurerm_resource_group.secondary.location
+      recovery_point_retention_in_minutes = 1440
+      application_consistent_snapshot_frequency_in_minutes = 60
+    }
+3. Geo-Redundant Storage (GRS) for Data
+    Use Geo-Redundant Storage (GRS) or Read-Access Geo-Redundant Storage (RA-GRS) to ensure data availability in the secondary region.
+    
+    Example:
+    
+    hcl
+    Copy code
+    resource "azurerm_storage_account" "example" {
+      name                     = "examplestorage"
+      resource_group_name      = azurerm_resource_group.primary.name
+      location                 = azurerm_resource_group.primary.location
+      account_tier             = "Standard"
+      account_replication_type = "GRS"
+    }
+4. Load Balancing and Traffic Management
+    Use Azure Traffic Manager or Azure Front Door for global traffic routing and failover to the secondary region.
+    
+    Example:
+    
+    hcl
+    Copy code
+    resource "azurerm_traffic_manager_profile" "example" {
+      name                = "traffic-manager"
+      resource_group_name = azurerm_resource_group.primary.name
+      location            = azurerm_resource_group.primary.location
+    
+      traffic_routing_method = "Priority"
+    
+      dns_config {
+        relative_name = "apptraffic"
+        ttl           = 30
+      }
+    
+      monitor_config {
+        protocol = "HTTP"
+        port     = 80
+        path     = "/"
+      }
+    }
+    
+    resource "azurerm_traffic_manager_endpoint" "primary" {
+      name                = "primary-endpoint"
+      profile_name        = azurerm_traffic_manager_profile.example.name
+      resource_group_name = azurerm_resource_group.primary.name
+      target_resource_id  = azurerm_app_service.primary.id
+      priority            = 1
+    }
+    
+    resource "azurerm_traffic_manager_endpoint" "secondary" {
+      name                = "secondary-endpoint"
+      profile_name        = azurerm_traffic_manager_profile.example.name
+      resource_group_name = azurerm_resource_group.primary.name
+      target_resource_id  = azurerm_app_service.secondary.id
+      priority            = 2
+    }
+5. Backup Configuration
+    Use Azure Backup to ensure periodic backups of VMs, databases, and other critical resources.
+    Automate backups using Terraform:
+    hcl
+    Copy code
+    resource "azurerm_backup_policy_vm" "example" {
+      name                = "vm-backup-policy"
+      resource_group_name = azurerm_resource_group.primary.name
+      recovery_vault_name = azurerm_recovery_services_vault.example.name
+    
+      retention_daily {
+        count = 7
+      }
+    
+      backup {
+        frequency = "Daily"
+        time      = "23:00"
+      }
+    }
+6. Database Failover
+    Use Azure SQL Auto-Failover Groups or equivalent replication mechanisms for databases.
+    hcl
+    Copy code
+    resource "azurerm_sql_failover_group" "example" {
+      name                = "sql-failover-group"
+      resource_group_name = azurerm_resource_group.primary.name
+      server_name         = azurerm_sql_server.primary.name
+    
+      partner_servers {
+        id = azurerm_sql_server.secondary.id
+      }
+    
+      read_write_endpoint_failover_policy {
+        mode          = "Automatic"
+        grace_minutes = 5
+      }
+    }
+7. Monitoring and Alerts
+    Set up alerts for failures or latency issues to quickly respond to incidents.
+    Use Azure Monitor with Log Analytics for centralized logging.
+    hcl
+    Copy code
+    resource "azurerm_monitor_metric_alert" "example" {
+      name                = "high-cpu-alert"
+      resource_group_name = azurerm_resource_group.primary.name
+    
+      criteria {
+        metric_namespace = "Microsoft.Compute/virtualMachines"
+        metric_name      = "Percentage CPU"
+        aggregation      = "Average"
+        operator         = "GreaterThan"
+        threshold        = 80
+      }
+    }
+8. Automated Recovery Scripts
+    Write Terraform modules or Azure CLI scripts to switch traffic to the secondary region during failover.
+    
+    Example failover Terraform module:
+    
+    hcl
+    Copy code
+    module "failover" {
+      source              = "./modules/traffic-manager-failover"
+      primary_endpoint    = azurerm_traffic_manager_endpoint.primary.id
+      secondary_endpoint  = azurerm_traffic_manager_endpoint.secondary.id
+      active_region       = "secondary"
+    }
+9. Testing the DR Plan
+    Regularly simulate failovers to validate the DR plan.
+    Use tools like Azure Chaos Studio to test resiliency.
+    10. Documentation and Automation
+    Document the DR plan, including failover steps and restoration procedures.
+    Automate as much as possible to reduce human intervention.
